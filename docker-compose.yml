@@ -1,0 +1,73 @@
+# Docker Compose propio de esta demo, independiente del de virtualfact_chats.
+# Se une a la red pública que YA levanta el docker-compose.yml de
+# virtualfact_chats (servicio `support_public`) para poder llamar al Core
+# API y al Hub por su nombre de contenedor (core-api, websocket-hub) en vez
+# de localhost. Esa red tiene que existir de antes: primero
+# `docker compose up -d` en virtualfact_chats, recién después este.
+#
+# Tres servicios, DOS proyectos externos distintos -- cada uno con su
+# propio código, su propia llave/credencial, su propio backend (donde le
+# corresponde). virtualfact_chats es solo el puente (api-core, websocket-hub,
+# etc.) entre estos dos proyectos y nosotros -- nada de código de ellos vive
+# ahí.
+#   - cliente/: simula el portal donde el cliente escribe (chat). PHP +
+#     Bootstrap -- Apache adentro escucha en :80, publicado en :4000.
+#     Backend propio porque necesita guardar PORTAL_API_KEY sin exponerla
+#     al navegador.
+#   - empresas/facturacion/: simula el backend del sistema de facturación
+#     (manda facturas, lee de vuelta el registro). PHP + Bootstrap, mismo
+#     patrón, con su propia EMPRESAS_API_KEY.
+#   - empresas/crm-agentes/: el módulo Bootstrap que se replica en el
+#     sistema empresas real, para el personal de soporte. SIN backend propio
+#     a propósito -- el personal inicia sesión directo con /auth/agent-login
+#     (usuario/contraseña), no hay ninguna llave que proteger de este lado.
+services:
+  cliente:
+    build:
+      context: ./cliente
+      dockerfile: Dockerfile
+    container_name: portal_cliente_demo
+    restart: unless-stopped
+    env_file:
+      - ./cliente/.env
+    ports:
+      - "${PORT:-4000}:80"
+    networks:
+      - support_public
+
+  empresas-facturacion:
+    build:
+      context: ./empresas/facturacion
+      dockerfile: Dockerfile
+    container_name: empresas_facturacion_demo
+    restart: unless-stopped
+    env_file:
+      - ./empresas/facturacion/.env
+    ports:
+      - "4001:80"
+    networks:
+      - support_public
+
+  empresas-crm-agentes:
+    build:
+      context: ./empresas/crm-agentes
+      dockerfile: Dockerfile
+    container_name: empresas_crm_agentes_demo
+    restart: unless-stopped
+    environment:
+      CORE_API_URL: ${CRM_AGENTES_API_URL:-http://localhost:3002/api/v1}
+      WS_URL: ${CRM_AGENTES_WS_URL:-http://localhost:3001}
+    ports:
+      - "${CRM_AGENTES_PORT:-8090}:80"
+    networks:
+      - support_public
+
+networks:
+  support_public:
+    external: true
+    # Nombre real de la red que crea virtualfact_chats/docker-compose.yml:
+    # "<carpeta_del_proyecto>_<nombre_de_la_red>". Si esa carpeta no se
+    # llama "virtualfact_chats" o corriste `docker compose` con otro nombre
+    # de proyecto (COMPOSE_PROJECT_NAME), ajustar este valor -- se puede ver
+    # la lista real con `docker network ls`.
+    name: ${VIRTUALFACT_NETWORK:-virtualfact_chats_support_public}

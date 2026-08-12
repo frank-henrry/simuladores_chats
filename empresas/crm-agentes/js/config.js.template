@@ -1,0 +1,6 @@
+'use strict';
+
+window.APP_CONFIG = {
+  CORE_API_URL: '${CORE_API_URL}',
+  WS_URL: '${WS_URL}',
+};

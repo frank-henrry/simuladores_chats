@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="es" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" href="data:," />
+  <title>Bandeja — Módulo de Chats</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet" />
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet" />
+  <link href="../css/estilos.css" rel="stylesheet" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Encabezado: igual que App.tsx del CRM en React (Bandeja/Facturación/Auditoría + campanita + agente + salir) -->
+    <header class="navbar navbar-expand border-bottom px-2 px-md-3" style="flex-shrink:0;">
+      <span class="navbar-brand fw-bold text-success mb-0">Módulo de Chats</span>
+      <ul class="nav nav-pills gap-1 ms-2">
+        <li class="nav-item"><a class="nav-link active" href="bandeja.html"><i class="bi bi-inbox"></i> <span class="d-none d-sm-inline">Bandeja</span></a></li>
+        <li class="nav-item"><a class="nav-link" href="facturacion.html"><i class="bi bi-receipt"></i> <span class="d-none d-sm-inline">Facturación</span></a></li>
+        <li class="nav-item"><a class="nav-link" href="auditoria.html"><i class="bi bi-shield-check"></i> <span class="d-none d-sm-inline">Auditoría</span></a></li>
+      </ul>
+      <div class="ms-auto d-flex align-items-center gap-2">
+        <div class="dropdown">
+          <button class="btn btn-sm btn-outline-secondary position-relative" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="bi bi-bell"></i>
+            <span id="badge-notif" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger d-none">0</span>
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end p-2" id="lista-notificaciones" style="width: 320px; max-height: 380px; overflow-y:auto;">
+            <li class="text-secondary small px-2">Sin notificaciones todavía.</li>
+          </ul>
+        </div>
+        <span id="nombre-agente" class="small text-secondary d-none d-md-inline"></span>
+        <button id="btn-logout" class="btn btn-sm btn-outline-danger"><i class="bi bi-box-arrow-right"></i> <span class="d-none d-sm-inline">Salir</span></button>
+      </div>
+    </header>
+
+    <main class="app-main">
+      <!-- Columna 1: clientes (siempre visible en escritorio; en móvil es una pantalla aparte) -->
+      <div id="col-clientes" class="mobile-visible">
+        <div class="p-2 border-bottom">
+          <div class="input-group input-group-sm mb-2">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input type="text" id="buscar-cliente" class="form-control" placeholder="Buscar por RUC o nombre..." />
+          </div>
+          <div class="btn-group btn-group-sm w-100" role="group">
+            <button id="filtro-todos" class="btn btn-success">Todos</button>
+            <button id="filtro-no-leidos" class="btn btn-outline-success">No leídos <span id="contador-no-leidos"></span></button>
+          </div>
+        </div>
+        <div id="lista-clientes"></div>
+        <button id="btn-mas-clientes" class="btn btn-sm btn-link w-100 d-none">Cargar más</button>
+      </div>
+
+      <!-- Columna 2: chat -->
+      <div id="col-chat" class="d-none d-md-flex">
+        <div id="chat-vacio" class="d-flex flex-column align-items-center justify-content-center h-100 text-secondary">
+          <i class="bi bi-inbox fs-1"></i>
+          <p class="small text-uppercase mt-2">Selecciona un cliente</p>
+        </div>
+
+        <div id="chat-contenido" class="d-none flex-column h-100">
+          <div class="border-bottom p-2 d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2 min-w-0">
+              <button id="btn-volver-clientes" class="btn btn-sm btn-outline-secondary d-md-none"><i class="bi bi-arrow-left"></i></button>
+              <strong id="chat-titulo" class="text-truncate"></strong>
+              <span id="chat-badge-status" class="d-none d-sm-inline"></span>
+              <span id="chat-badge-modo" class="d-none d-sm-inline"></span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              <button id="btn-resolver" class="btn btn-sm btn-success d-none">
+                <i class="bi bi-check-circle"></i> <span class="d-none d-sm-inline">Marcar resuelto</span>
+              </button>
+              <button id="btn-ver-detalles" class="btn btn-sm btn-outline-secondary d-md-none"><i class="bi bi-info-circle"></i></button>
+            </div>
+          </div>
+
+          <div id="mensajes"></div>
+
+          <div id="escribiendo" class="px-3 small text-success fst-italic d-none">Escribiendo...</div>
+
+          <form id="form-enviar" class="border-top p-2">
+            <div id="composer-normal" class="composer-bar d-flex align-items-end gap-2">
+              <div class="dropdown dropup">
+                <button type="button" id="btn-menu-adjuntar" class="btn btn-icon-round" data-bs-toggle="dropdown" aria-expanded="false" title="Adjuntar">
+                  <i class="bi bi-plus-lg"></i>
+                </button>
+                <div class="dropdown-menu dropdown-menu-dark p-1 menu-adjuntar" style="min-width: 190px;">
+                  <!-- Vista 1: opciones (igual a WhatsApp, sin cámara/encuesta/evento/sticker) -->
+                  <div id="vista-adjuntar-opciones">
+                    <button type="button" class="dropdown-item d-flex align-items-center gap-2 rounded-3 py-1" id="opt-documento">
+                      <span class="adjuntar-icono icono-documento"><i class="bi bi-file-earmark-text-fill"></i></span>
+                      Documento
+                    </button>
+                    <button type="button" class="dropdown-item d-flex align-items-center gap-2 rounded-3 py-1" id="opt-fotos">
+                      <span class="adjuntar-icono icono-fotos"><i class="bi bi-image-fill"></i></span>
+                      Fotos y videos
+                    </button>
+                    <button type="button" class="dropdown-item d-flex align-items-center gap-2 rounded-3 py-1" id="opt-audio">
+                      <span class="adjuntar-icono icono-audio"><i class="bi bi-headphones"></i></span>
+                      Audio
+                    </button>
+                    <button type="button" class="dropdown-item d-flex align-items-center gap-2 rounded-3 py-1" id="opt-contacto">
+                      <span class="adjuntar-icono icono-contacto"><i class="bi bi-person-vcard-fill"></i></span>
+                      Contacto
+                    </button>
+                  </div>
+
+                  <!-- Vista 2: "Documento" -- único caso que aún pide categoría
+                       (comprobante de pago sigue existiendo, solo que ahora vive acá). -->
+                  <div id="vista-adjuntar-documento" class="d-none">
+                    <button type="button" class="dropdown-item d-flex align-items-center gap-2 text-secondary py-1" id="btn-volver-documento">
+                      <i class="bi bi-arrow-left"></i> Volver
+                    </button>
+                    <div class="px-2 pt-1 pb-1">
+                      <select id="select-categoria-archivo" class="form-select form-select-sm mb-2">
+                        <option value="other">Documento</option>
+                        <option value="payment_receipt">Comprobante de pago</option>
+                      </select>
+                      <button type="button" id="btn-adjuntar" class="btn btn-sm btn-success w-100">
+                        <i class="bi bi-paperclip"></i> Elegir archivo
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Vista 3: "Contacto" -- lista de agentes de soporte activos -->
+                  <div id="vista-adjuntar-contactos" class="d-none">
+                    <button type="button" class="dropdown-item d-flex align-items-center gap-2 text-secondary py-1" id="btn-volver-contactos">
+                      <i class="bi bi-arrow-left"></i> Volver
+                    </button>
+                    <div id="lista-contactos-soporte" class="overflow-auto" style="max-height: 220px;"></div>
+                  </div>
+                </div>
+
+                <input type="file" id="input-archivo" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain" class="d-none" />
+                <input type="file" id="input-fotos" accept="image/*,video/*" class="d-none" />
+                <input type="file" id="input-audio" accept="audio/*" class="d-none" />
+              </div>
+
+              <textarea id="mensaje-texto" class="form-control composer-input" rows="1" placeholder="Escribe un mensaje"></textarea>
+
+              <button type="button" id="btn-grabar" class="btn btn-icon-round" title="Grabar audio">
+                <i id="icono-grabar" class="bi bi-mic"></i>
+              </button>
+              <button type="submit" id="btn-enviar" class="btn btn-icon-round btn-enviar-activo d-none" title="Enviar">
+                <i class="bi bi-send-fill"></i>
+              </button>
+            </div>
+
+            <!-- Grabando: estilo WhatsApp -- cancelar, punto rojo + tiempo,
+                 "onda" decorativa, y detener (no manda todavía). -->
+            <div id="composer-grabando" class="composer-bar d-none align-items-center gap-2">
+              <button type="button" id="btn-cancelar-grabacion" class="btn btn-icon-round" title="Cancelar grabación">
+                <i class="bi bi-trash3"></i>
+              </button>
+              <span class="grabando-punto"></span>
+              <span id="grabando-tiempo" class="font-monospace small" style="min-width: 2.5em;">0:00</span>
+              <div class="grabando-onda flex-fill">
+                <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+              </div>
+              <button type="button" id="btn-detener-grabacion" class="btn btn-icon-round" title="Detener">
+                <i class="bi bi-stop-fill"></i>
+              </button>
+            </div>
+
+            <!-- Revisar: ya se detuvo, se escucha antes de decidir -- recién acá se manda. -->
+            <div id="composer-revisar" class="composer-bar d-none align-items-center gap-2">
+              <button type="button" id="btn-descartar-audio" class="btn btn-icon-round" title="Descartar">
+                <i class="bi bi-trash3"></i>
+              </button>
+              <audio id="audio-preview" controls class="flex-fill"></audio>
+              <button type="button" id="btn-enviar-audio" class="btn btn-icon-round btn-enviar-activo" title="Enviar audio">
+                <i class="bi bi-send-fill"></i>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Columna 3: detalles/notas -->
+      <div id="col-detalles" class="d-none d-md-flex">
+        <ul class="nav nav-tabs" id="tabs-detalles">
+          <li class="nav-item"><button class="nav-link active" data-tab="detalles">Detalles</button></li>
+          <li class="nav-item"><button class="nav-link" data-tab="notas">Notas</button></li>
+        </ul>
+
+        <div id="panel-detalles" class="p-3">
+          <button id="btn-volver-chat-movil" class="btn btn-sm btn-outline-secondary d-md-none mb-2"><i class="bi bi-arrow-left"></i> Volver al chat</button>
+
+          <h6 class="text-uppercase small text-secondary">Asignación y estado</h6>
+          <div class="small mb-2">Asignado a: <strong id="detalle-asignado">Sin asignar</strong></div>
+
+          <div id="grupo-reasignar" class="mb-2 d-none">
+            <label class="form-label small text-secondary">Reasignar a</label>
+            <select id="select-reasignar" class="form-select form-select-sm">
+              <option value="">Elegir agente…</option>
+            </select>
+          </div>
+
+          <div class="d-flex gap-2 mb-3">
+            <button id="btn-autoasignar" class="btn btn-sm btn-success flex-fill"><i class="bi bi-person-check"></i> Autoasignar</button>
+            <button id="btn-liberar" class="btn btn-sm btn-outline-secondary flex-fill"><i class="bi bi-person-dash"></i> Liberar</button>
+          </div>
+
+          <label class="form-label small text-secondary">Estado</label>
+          <select id="select-estado" class="form-select form-select-sm mb-3"></select>
+
+          <label class="form-label small text-secondary">Modo de atención</label>
+          <select id="select-modo" class="form-select form-select-sm mb-3"></select>
+
+          <hr />
+          <h6 class="text-uppercase small text-secondary"><i class="bi bi-person"></i> Cliente y pagos</h6>
+          <div class="small mb-2">ID externo: <span id="detalle-ruc" class="font-monospace"></span></div>
+          <div id="detalle-conversaciones" class="small mb-2"></div>
+          <div id="detalle-finanzas" class="small"></div>
+        </div>
+
+        <div id="panel-notas" class="p-3 d-none d-flex flex-column h-100">
+          <h6 class="text-uppercase small text-secondary">Notas internas (no visibles para el cliente)</h6>
+          <div id="lista-notas" class="flex-fill overflow-auto mb-2"></div>
+          <form id="form-nota" class="d-flex gap-2">
+            <textarea id="nota-texto" class="form-control form-control-sm" rows="2" placeholder="Agregar nota interna..."></textarea>
+            <button type="submit" class="btn btn-sm btn-warning"><i class="bi bi-send"></i></button>
+          </form>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <!-- Menú contextual de mensaje (clic derecho / mantener presionado), estilo WhatsApp -->
+  <div id="menu-contextual-mensaje" class="dropdown-menu dropdown-menu-dark p-1 d-none menu-contextual-msg">
+    <button type="button" id="ctx-eliminar-mensaje" class="dropdown-item d-flex align-items-center gap-2 py-1 text-danger">
+      <i class="bi bi-trash3"></i> Eliminar para todos
+    </button>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script src="../js/config.js"></script>
+  <script src="../js/auth.js"></script>
+  <script src="../js/api.js"></script>
+  <script src="../js/labels.js"></script>
+  <script src="../js/notificaciones.js"></script>
+  <script src="../js/socket.js"></script>
+  <script src="../js/bandeja.js"></script>
+</body>
+</html>

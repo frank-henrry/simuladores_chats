@@ -1,0 +1,260 @@
+/*
+ * Estilos propios encima de Bootstrap 5 (que ya trae data-bs-theme="dark"
+ * puesto en <html>, ver cada página). Bootstrap no trae "purple" ni "cyan"
+ * de fábrica en sus badges -- se definen acá para que el modo IA/Híbrido se
+ * vea igual que en el CRM en React (labels.ts).
+ */
+
+.badge-purple {
+  background-color: rgba(168, 85, 247, 0.2);
+  color: #d8b4fe;
+  border: 1px solid rgba(168, 85, 247, 0.4);
+}
+
+.badge-cyan {
+  background-color: rgba(34, 211, 238, 0.2);
+  color: #67e8f9;
+  border: 1px solid rgba(34, 211, 238, 0.4);
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  overflow: hidden;
+}
+
+.app-shell {
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+/* Columna 1: clientes -- siempre visible en escritorio (>=768px), una
+   pantalla más en móvil (ver bandeja.js, que agrega/quita .d-none según
+   qué vista esté activa). */
+#col-clientes {
+  width: 280px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--bs-border-color);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+#col-clientes.mobile-visible { display: flex !important; }
+
+#lista-clientes {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.cliente-item {
+  cursor: pointer;
+  border-left: 3px solid transparent;
+}
+.cliente-item:hover { background-color: var(--bs-tertiary-bg); }
+.cliente-item.activo {
+  background-color: rgba(25, 135, 84, 0.15);
+  border-left-color: #198754;
+}
+
+/* Columna 2: chat */
+#col-chat {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+#mensajes {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  padding: 1rem;
+}
+
+.msg-row { display: flex; margin-bottom: 0.4rem; }
+.msg-row.mine { justify-content: flex-end; }
+.msg-bubble {
+  max-width: min(75%, 340px);
+  width: fit-content;
+  border-radius: 1rem;
+  padding: 0.4rem 0.65rem;
+  font-size: 0.82rem;
+}
+.msg-bubble.customer { background-color: var(--bs-tertiary-bg); }
+.msg-bubble.support_agent { background-color: #198754; color: #fff; }
+.msg-bubble.ai { background-color: #7c3aed; color: #fff; }
+.msg-bubble.deleted { background-color: transparent; border: 1px dashed var(--bs-border-color); font-style: italic; color: var(--bs-secondary-color); }
+.msg-bubble.eliminable { cursor: context-menu; }
+.msg-bubble audio {
+  display: block;
+  width: 100%;
+  max-width: 240px;
+  height: 32px;
+}
+@media (max-width: 767.98px) {
+  .msg-bubble { max-width: 85%; }
+}
+
+.menu-contextual-msg {
+  position: fixed;
+  z-index: 1090;
+  min-width: 190px;
+}
+.msg-meta { font-size: 0.7rem; color: var(--bs-secondary-color); margin-bottom: 0.15rem; }
+
+/* Columna 3: detalles/notas -- siempre visible en escritorio, pantalla
+   aparte en móvil. */
+#col-detalles {
+  width: 320px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--bs-border-color);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+}
+#col-detalles.mobile-visible { display: flex !important; }
+
+/* Responsive: bajo 768px, las columnas se manejan una a la vez con
+   .d-none/.mobile-visible desde bandeja.js (ver README para el detalle). */
+@media (max-width: 767.98px) {
+  #col-clientes, #col-chat, #col-detalles {
+    width: 100%;
+  }
+}
+
+.list-group-item-action.cliente-item { border-radius: 0; }
+
+.nota-item {
+  background-color: rgba(255, 193, 7, 0.08);
+  border: 1px dashed rgba(255, 193, 7, 0.4);
+}
+
+/* Barra de envío estilo WhatsApp: "+" para adjuntar, input tipo píldora
+   que crece con el texto, y un botón circular que alterna entre micrófono
+   (sin texto) y enviar (con texto) -- ver bandeja.js, alternarBotonEnviar(). */
+.composer-bar {
+  background-color: transparent;
+}
+
+.composer-input {
+  border-radius: 1.25rem;
+  resize: none;
+  max-height: 120px;
+  overflow-y: auto;
+  background-color: var(--bs-tertiary-bg);
+  border: 1px solid var(--bs-border-color);
+  padding: 0.6rem 1rem;
+  line-height: 1.3;
+}
+.composer-input:focus {
+  box-shadow: none;
+  border-color: var(--bs-border-color);
+  background-color: var(--bs-tertiary-bg);
+}
+
+.btn-icon-round {
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: none;
+  background-color: var(--bs-tertiary-bg);
+  color: var(--bs-secondary-color);
+  font-size: 1.1rem;
+  padding: 0;
+}
+.btn-icon-round:hover { background-color: var(--bs-secondary-bg); color: var(--bs-body-color); }
+.btn-icon-round.btn-enviar-activo { background-color: #198754; color: #fff; }
+.btn-icon-round.btn-enviar-activo:hover { background-color: #157347; color: #fff; }
+.btn-icon-round.grabando { background-color: #dc3545; color: #fff; }
+
+/* Menú "+" estilo WhatsApp: filas compactas con ícono circular de color. */
+.menu-adjuntar .dropdown-item {
+  color: var(--bs-body-color);
+  font-size: 0.85rem;
+}
+.adjuntar-icono {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 0.8rem;
+}
+.icono-documento { background-color: #7c5cff; }
+.icono-fotos { background-color: #4f9eff; }
+.icono-audio { background-color: #ff7a59; }
+.icono-contacto { background-color: #17a673; }
+
+/* Grabación de audio estilo WhatsApp: grabando -> detener -> revisar/enviar
+   (nunca se manda de un tirón, ver bandeja.js). */
+.grabando-punto {
+  width: 10px;
+  height: 10px;
+  min-width: 10px;
+  border-radius: 50%;
+  background-color: #dc3545;
+  animation: pulso-grabando 1s ease-in-out infinite;
+}
+@keyframes pulso-grabando {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+.grabando-onda {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  height: 24px;
+}
+.grabando-onda span {
+  width: 3px;
+  border-radius: 2px;
+  background-color: var(--bs-secondary-color);
+  animation: onda-grabando 1s ease-in-out infinite;
+}
+.grabando-onda span:nth-child(1) { height: 40%; animation-delay: 0s; }
+.grabando-onda span:nth-child(2) { height: 70%; animation-delay: 0.1s; }
+.grabando-onda span:nth-child(3) { height: 100%; animation-delay: 0.2s; }
+.grabando-onda span:nth-child(4) { height: 55%; animation-delay: 0.3s; }
+.grabando-onda span:nth-child(5) { height: 90%; animation-delay: 0.4s; }
+.grabando-onda span:nth-child(6) { height: 50%; animation-delay: 0.5s; }
+.grabando-onda span:nth-child(7) { height: 80%; animation-delay: 0.6s; }
+.grabando-onda span:nth-child(8) { height: 45%; animation-delay: 0.7s; }
+@keyframes onda-grabando {
+  0%, 100% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1); }
+}
+
+#audio-preview {
+  height: 40px;
+}
+
+#toast-container {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1080;
+}
