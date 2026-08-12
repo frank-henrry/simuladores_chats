@@ -5,6 +5,9 @@ let accessToken = null;
 let coreApiUrl = null;
 let conversationId = null;
 let socket = null;
+let renewalTimer = null;
+let ultimoExternalCustomerId = null;
+let ultimoDisplayName = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -77,53 +80,85 @@ function cargarSocketIoSiHaceFalta(wsPublicUrl) {
   });
 }
 
+/**
+ * Consigue (o renueva) el accessToken y RECONECTA el socket con el token
+ * nuevo -- hallazgo real: renovar solo el token para las llamadas REST no
+ * alcanza, porque el socket sigue conectado con el viejo. Cuando ese token
+ * vence, el socket se cae y las respuestas del agente dejan de llegar en
+ * vivo, aunque el REST puntual (con un token fresco) siga funcionando.
+ * Por eso esta función SIEMPRE reconecta el socket, no solo pide el token.
+ *
+ * Se llama tres veces: al conectar por primera vez (click del botón),
+ * proactivamente un minuto antes de que expire (setTimeout de abajo), y
+ * reactivamente si cualquier llamada REST recibe 401 (ver fetchConReintento).
+ */
+async function conectarChat(externalCustomerId, displayName) {
+  const sesionRes = await fetch('chat-token.php', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ externalCustomerId, displayName }),
+  });
+  const sesion = await sesionRes.json();
+  if (!sesionRes.ok) throw new Error(JSON.stringify(sesion));
+
+  accessToken = sesion.accessToken;
+  coreApiUrl = sesion.coreApiUrl;
+  conversationId = sesion.conversationId;
+  log(`Access token de cliente obtenido (dura ${sesion.expiresIn}s). Chat: ${conversationId}`);
+
+  await cargarSocketIoSiHaceFalta(sesion.wsPublicUrl);
+
+  if (socket) socket.disconnect(); // suelta el socket viejo (token vencido o por vencer)
+  socket = io(sesion.wsPublicUrl, { auth: { token: accessToken } });
+
+  socket.on('connect', () => {
+    log(`Socket conectado (id ${socket.id}).`);
+    socket.emit('conversation:join', { conversationId }, (ack) => {
+      if (ack && ack.ok) log('Unido a la sala de la conversacion.');
+      else log(`ERROR al unirse a la sala: ${JSON.stringify(ack)}`);
+    });
+  });
+  socket.on('connect_error', (err) => log(`ERROR de conexion socket: ${err.message}`));
+  socket.on('conversation:message-created', (payload) => {
+    log(`<- evento por socket: conversation:message-created (${payload.senderType})`);
+    pintarMensaje(payload);
+  });
+  socket.on('conversation:status-changed', (payload) => {
+    log(`<- evento por socket: conversation:status-changed -> ${payload.status}`);
+  });
+
+  // Renovar proactivamente un minuto antes de que expire (expiresIn=900 -> a los 840s).
+  clearTimeout(renewalTimer);
+  renewalTimer = setTimeout(() => {
+    log('Renovando accessToken antes de que expire...');
+    conectarChat(externalCustomerId, displayName).catch((err) => log(`FALLO al renovar sesión: ${err.message}`));
+  }, Math.max((sesion.expiresIn - 60) * 1000, 5000));
+
+  return sesion;
+}
+
+/** fetch() que renueva el token y reintenta UNA vez si el Core responde 401. */
+async function fetchConReintento(url, opciones) {
+  let res = await fetch(url, opciones);
+  if (res.status === 401 && ultimoExternalCustomerId) {
+    log('Petición rechazada por token vencido -- renovando y reintentando...');
+    await conectarChat(ultimoExternalCustomerId, ultimoDisplayName);
+    opciones.headers.Authorization = `Bearer ${accessToken}`;
+    res = await fetch(url, opciones);
+  }
+  return res;
+}
+
 $('btnIniciar').addEventListener('click', async () => {
   $('estadoConexion').textContent = 'iniciando...';
   const externalCustomerId = $('externalCustomerId').value.trim();
   const displayName = $('displayNameCliente').value.trim();
+  ultimoExternalCustomerId = externalCustomerId;
+  ultimoDisplayName = displayName;
 
   try {
-    // Paso 1: nuestro backend (chat-token.php) cambia la PORTAL_API_KEY por
-    // un access token de cliente. El navegador NUNCA la ve. chat-sessions ya
-    // crea/reutiliza el chat de este cliente y devuelve su id -- un solo
-    // chat continuo por cliente, no hace falta "abrir" nada aparte
-    // (implementacion/08-guia-integracion-portal.md#8.3).
     log(`POST /chat-token.php (nuestro backend PHP simulando al portal, displayName="${displayName}")...`);
-    const sesionRes = await fetch('chat-token.php', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ externalCustomerId, displayName }),
-    });
-    const sesion = await sesionRes.json();
-    if (!sesionRes.ok) throw new Error(JSON.stringify(sesion));
-    accessToken = sesion.accessToken;
-    coreApiUrl = sesion.coreApiUrl;
-    conversationId = sesion.conversationId;
-    log(`Access token de cliente obtenido (dura ${sesion.expiresIn}s). Chat: ${conversationId}`);
-
-    // Paso 2: el navegador se conecta al WebSocket Hub con ese mismo access token.
-    await cargarSocketIoSiHaceFalta(sesion.wsPublicUrl);
-    socket = io(sesion.wsPublicUrl, { auth: { token: accessToken } });
-
-    socket.on('connect', () => {
-      log(`Socket conectado (id ${socket.id}).`);
-      socket.emit('conversation:join', { conversationId }, (ack) => {
-        if (ack && ack.ok) log('Unido a la sala de la conversacion.');
-        else log(`ERROR al unirse a la sala: ${JSON.stringify(ack)}`);
-      });
-    });
-
-    socket.on('connect_error', (err) => log(`ERROR de conexion socket: ${err.message}`));
-
-    socket.on('conversation:message-created', (payload) => {
-      log(`<- evento por socket: conversation:message-created (${payload.senderType})`);
-      pintarMensaje(payload);
-    });
-
-    socket.on('conversation:status-changed', (payload) => {
-      log(`<- evento por socket: conversation:status-changed -> ${payload.status}`);
-    });
-
+    await conectarChat(externalCustomerId, displayName);
     $('estadoConexion').textContent = 'conectado';
     habilitarChat(true);
   } catch (err) {
@@ -138,7 +173,7 @@ $('btnEnviar').addEventListener('click', async () => {
   if (!content) return;
   try {
     log('POST /conversations/:id/messages...');
-    const res = await fetch(`${coreApiUrl}/conversations/${conversationId}/messages`, {
+    const res = await fetchConReintento(`${coreApiUrl}/conversations/${conversationId}/messages`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
       body: JSON.stringify({ clientMessageId: crypto.randomUUID(), content }),
@@ -161,7 +196,7 @@ $('btnAdjuntar').addEventListener('click', async () => {
     form.append('category', $('categoriaArchivo').value);
     form.append('clientMessageId', crypto.randomUUID());
     log('POST /conversations/:id/attachments (multipart)...');
-    const res = await fetch(`${coreApiUrl}/conversations/${conversationId}/attachments`, {
+    const res = await fetchConReintento(`${coreApiUrl}/conversations/${conversationId}/attachments`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}` },
       body: form,
@@ -186,7 +221,7 @@ async function subirAudio(blob) {
     form.append('category', 'voice_note');
     form.append('clientMessageId', crypto.randomUUID());
     log('POST /conversations/:id/attachments (audio, multipart)...');
-    const res = await fetch(`${coreApiUrl}/conversations/${conversationId}/attachments`, {
+    const res = await fetchConReintento(`${coreApiUrl}/conversations/${conversationId}/attachments`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}` },
       body: form,
@@ -230,7 +265,7 @@ $('btnGrabar').addEventListener('click', async () => {
 $('btnResolver').addEventListener('click', async () => {
   try {
     log('PATCH /portal/me/conversations/:id/resolve...');
-    const res = await fetch(`${coreApiUrl}/portal/me/conversations/${conversationId}/resolve`, {
+    const res = await fetchConReintento(`${coreApiUrl}/portal/me/conversations/${conversationId}/resolve`, {
       method: 'PATCH',
       headers: { Authorization: `Bearer ${accessToken}` },
     });

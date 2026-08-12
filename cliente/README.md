@@ -93,6 +93,26 @@ await fetch(`${coreApiUrl}/portal/me/conversations/${conversationId}/resolve`, {
 
 Esto **no cierra el chat** -- es solo informativo. El cliente puede seguir escribiendo en el mismo `conversationId` cuando quiera, hoy o meses después.
 
+### Paso 5 — renovar el token ANTES de que expire, y reconectar el socket (crítico, no opcional)
+
+**Hallazgo real de un integrador probando esto:** renovar solo el `accessToken` para las llamadas REST no alcanza. El socket sigue conectado con el token viejo -- cuando ese token vence, el socket se cae, y las respuestas del agente dejan de llegar en vivo aunque el REST puntual (con un token fresco) siga funcionando. Por eso `app.js` (`conectarChat()`) **siempre reconecta el socket** al renovar, no solo pide un token nuevo:
+
+```js
+async function conectarChat(externalCustomerId, displayName) {
+  const sesion = await obtenerSesionChat(...); // su propio backend
+  accessToken = sesion.accessToken;
+
+  if (socket) socket.disconnect(); // suelta el socket viejo
+  socket = io(sesion.wsPublicUrl, { auth: { token: accessToken } });
+  // ...volver a registrar los listeners y hacer conversation:join...
+
+  // Renovar proactivamente un minuto antes de que expire.
+  setTimeout(() => conectarChat(externalCustomerId, displayName), (sesion.expiresIn - 60) * 1000);
+}
+```
+
+Además, cualquier llamada REST debe manejar un 401 renovando y reintentando (por si el timer no alcanzó a dispararse a tiempo) -- ver `fetchConReintento()` en `app.js`.
+
 ## Cómo correrlo
 
 Primero, siempre, tiene que estar levantado el stack de `virtualfact_chats` (`docker compose up -d` desde esa carpeta) — este demo depende de su red.
