@@ -1,0 +1,8 @@
+# Sin esto, un checkout en Windows (git core.autocrlf=true, el default ahí)
+# convierte los saltos de línea de los .sh a CRLF -- el shebang "#!/bin/sh"
+# queda como "#!/bin/sh\r", el kernel busca un intérprete que no existe, y
+# el contenedor entra en loop de reinicio con "not found" aunque el archivo
+# esté ahí. Forzar LF siempre evita esto sin importar el sistema operativo
+# de quien clona.
+*.sh text eol=lf
+Dockerfile text eol=lf
