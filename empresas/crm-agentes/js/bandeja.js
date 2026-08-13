@@ -747,27 +747,43 @@ document.getElementById('form-nota').addEventListener('submit', async (e) => {
 // acá se re-pide por REST lo afectado, más fácil de seguir en una
 // referencia sin un framework de estado de por medio.
 // ---------------------------------------------------------------
-SocketHandlers.onMessageCreated = (payload) => {
+// Hallazgo real: estas funciones son async pero se llamaban sin `await` ni
+// `.catch()` en los handlers de socket -- si `cargarClientes`/`cargarMensajes`
+// fallaba (permiso, red, lo que sea), quedaba como "unhandled promise
+// rejection": invisible en pantalla, sin ningún aviso, solo un texto rojo en
+// la consola del navegador que nadie mira. `onEventoRealtime` envuelve
+// cualquier reacción a un evento de socket para que un fallo se vea siempre,
+// en vez de "no llegó nada" sin ninguna pista de por qué.
+function onEventoRealtime(nombreEvento, fn) {
+  Promise.resolve()
+    .then(fn)
+    .catch((err) => {
+      console.error(`[bandeja] fallo procesando evento de socket "${nombreEvento}":`, err);
+      mostrarToast(`No se pudo actualizar la bandeja (${nombreEvento}): ${err.message}`, 'danger');
+    });
+}
+
+SocketHandlers.onMessageCreated = (payload) => onEventoRealtime('conversation:message-created', async () => {
   const message = payload.message || payload;
   const convId = payload.conversationId || message.conversationId;
-  if (convId === conversationId) cargarMensajes(conversationId);
-  cargarClientes(true);
-};
-SocketHandlers.onMessageUpdated = (payload) => {
+  if (convId === conversationId) await cargarMensajes(conversationId);
+  await cargarClientes(true);
+});
+SocketHandlers.onMessageUpdated = (payload) => onEventoRealtime('conversation:message-updated', async () => {
   const message = payload.message || payload;
   const convId = payload.conversationId || message.conversationId;
-  if (convId === conversationId) cargarMensajes(conversationId);
-};
-SocketHandlers.onConversationCreated = () => cargarClientes(true);
-SocketHandlers.onReadUpdated = () => cargarClientes(true);
-SocketHandlers.onAssigned = (payload) => {
-  if (payload.conversationId === conversationId) abrirConversacion(conversationId);
-};
-SocketHandlers.onStatusChanged = (payload) => {
-  cargarClientes(true);
-  if (payload.conversationId === conversationId) abrirConversacion(conversationId);
-};
-SocketHandlers.onHandoff = () => cargarClientes(true);
+  if (convId === conversationId) await cargarMensajes(conversationId);
+});
+SocketHandlers.onConversationCreated = () => onEventoRealtime('conversation:created', () => cargarClientes(true));
+SocketHandlers.onReadUpdated = () => onEventoRealtime('conversation:read-updated', () => cargarClientes(true));
+SocketHandlers.onAssigned = (payload) => onEventoRealtime('conversation:assigned', async () => {
+  if (payload.conversationId === conversationId) await abrirConversacion(conversationId);
+});
+SocketHandlers.onStatusChanged = (payload) => onEventoRealtime('conversation:status-changed', async () => {
+  await cargarClientes(true);
+  if (payload.conversationId === conversationId) await abrirConversacion(conversationId);
+});
+SocketHandlers.onHandoff = () => onEventoRealtime('conversation:handoff', () => cargarClientes(true));
 
 // ---------------------------------------------------------------
 // Arranque
