@@ -35,6 +35,22 @@ const Notificaciones = {
     this._render();
   },
 
+  // Hallazgo real: las notificaciones solo se marcaban leídas si el agente
+  // hacía clic en la campanita -- si abría la conversación directo desde la
+  // lista de clientes (el camino normal), el contador se quedaba pegado
+  // para siempre aunque ya la hubiera visto. Esto lo conecta: abrir una
+  // conversación limpia cualquier notificación pendiente de ESA conversación.
+  marcarLeidasPorConversacion(conversationId) {
+    let cambio = false;
+    this.items.forEach((n) => {
+      if (n.conversationId === conversationId && !n.leida) {
+        n.leida = true;
+        cambio = true;
+      }
+    });
+    if (cambio) this._render();
+  },
+
   _render() {
     const lista = document.getElementById('lista-notificaciones');
     const badge = document.getElementById('badge-notif');

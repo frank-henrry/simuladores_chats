@@ -85,8 +85,16 @@ body {
   padding: 1rem;
 }
 
-.msg-row { display: flex; margin-bottom: 0.4rem; }
-.msg-row.mine { justify-content: flex-end; }
+/* flex-direction: column + align-items (en vez de una fila con un wrapper
+   interno sin estilo y justify-content: flex-end) -- align-items posiciona
+   cada hijo (meta/burbuja/meta) directamente, sin depender de que el
+   navegador calcule bien el ancho "shrink-to-fit" de un div intermedio.
+   Hallazgo real: con el wrapper intermedio, los mensajes de la IA (varias
+   líneas) no quedaban pegados al borde derecho como los del agente humano
+   (una línea corta) -- mismo CSS, msg-row.mine, pero el wrapper sin ancho
+   propio no se ajustaba igual según cuánto texto tenía adentro. */
+.msg-row { display: flex; flex-direction: column; align-items: flex-start; max-width: 100%; margin-bottom: 0.4rem; }
+.msg-row.mine { align-items: flex-end; }
 .msg-bubble {
   max-width: min(75%, 340px);
   width: fit-content;

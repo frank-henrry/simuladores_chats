@@ -180,6 +180,7 @@ async function abrirConversacion(id) {
 
   renderEncabezadoChat();
   unirseAConversacion(id);
+  Notificaciones.marcarLeidasPorConversacion(id);
   await cargarMensajes(id);
   await cargarPanelLateral();
 }
@@ -218,18 +219,16 @@ function construirBurbuja(m) {
     contenidoHtml = `<div class="msg-bubble deleted"><i class="bi bi-slash-circle"></i> Mensaje eliminado</div>`;
   } else {
     let cuerpo = m.content ? `<div>${escapeHtml(m.content)}</div>` : '';
-    if (m.type === 'document' && m.attachments && m.attachments.length > 0) {
+    if (ATTACHMENT_MESSAGE_TYPES.includes(m.type) && m.attachments && m.attachments.length > 0) {
       cuerpo += m.attachments.map((a) => construirAdjuntoHtml(a)).join('');
     }
     contenidoHtml = `<div class="msg-bubble ${m.senderType}">${cuerpo}</div>`;
   }
 
   div.innerHTML = `
-    <div>
-      <div class="msg-meta">${SENDER_LABEL_ES[m.senderType] || m.senderType}</div>
-      ${contenidoHtml}
-      <div class="msg-meta">${new Date(m.createdAt).toLocaleString()}</div>
-    </div>`;
+    <div class="msg-meta">${SENDER_LABEL_ES[m.senderType] || m.senderType}</div>
+    ${contenidoHtml}
+    <div class="msg-meta">${new Date(m.createdAt).toLocaleString()}</div>`;
 
   // Eliminar por clic derecho (o mantener presionado en móvil) sobre la
   // burbuja, estilo WhatsApp -- en vez de un ícono de basura siempre visible.

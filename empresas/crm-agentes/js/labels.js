@@ -72,10 +72,14 @@ const SCAN_STATUS_LABEL_ES = {
  * messagePreviewLabel() en labels.ts. Cuando el último mensaje es un
  * adjunto sin texto (lo normal), arma algo legible sin abrir el chat.
  */
+// 'image'/'audio'/'file' según el mime real (deriveMessageType en el
+// backend); 'document' se mantiene solo por mensajes de antes de ese cambio.
+const ATTACHMENT_MESSAGE_TYPES = ['image', 'audio', 'file', 'document'];
+
 function messagePreviewLabel({ messageType, attachmentCategory, attachmentMime, content }) {
-  if (messageType === 'document') {
-    if (attachmentCategory === 'voice_note' || (attachmentMime || '').startsWith('audio/')) return '🎤 Audio';
-    if ((attachmentMime || '').startsWith('image/')) return '📷 Foto';
+  if (ATTACHMENT_MESSAGE_TYPES.includes(messageType)) {
+    if (messageType === 'audio' || attachmentCategory === 'voice_note' || (attachmentMime || '').startsWith('audio/')) return '🎤 Audio';
+    if (messageType === 'image' || (attachmentMime || '').startsWith('image/')) return '📷 Foto';
     if (attachmentMime === 'application/pdf') return '📄 Documento';
     if (attachmentCategory === 'payment_receipt') return '💳 Comprobante de pago';
     return content ? `📎 ${content}` : '📎 Adjunto';

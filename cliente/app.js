@@ -21,7 +21,7 @@ async function pintarMensaje(msg) {
   const div = document.createElement('div');
   div.className = 'msg mb-2 pb-2 border-bottom';
   const quien = msg.senderType === 'customer' ? 'Cliente (yo)' : msg.senderType;
-  const cuerpo = msg.type === 'document'
+  const cuerpo = ['image', 'audio', 'file', 'document'].includes(msg.type)
     ? `[archivo adjunto: ${(msg.attachments || []).map((a) => a.originalFilename).join(', ')}] ${msg.content || ''}`
     : msg.content;
   div.innerHTML = `<div class="meta">${quien} - ${new Date(msg.createdAt).toLocaleTimeString()}</div><div>${cuerpo}</div>`;
