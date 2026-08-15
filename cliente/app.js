@@ -17,10 +17,24 @@ function log(msg) {
   el.scrollTop = el.scrollHeight;
 }
 
+// Antes salía el senderType crudo ("support_agent") tal cual para cualquier
+// mensaje que no fuera del propio cliente -- acá se traduce a algo legible.
+// senderId==='sistema-facturacion' es el mismo id fijo que usa
+// invoiceService.js del lado del backend (ver mirrorInvoiceAsMessage) para
+// las facturas que llegan como mensaje -- por eso se distingue de un agente
+// real aunque ambos sean senderType support_agent.
+// senderName lo manda el backend (computeSenderName en messageService.js):
+// el nombre real del agente ("Luis"), "Sistema de Facturación" o "Asistente
+// Virtual" según corresponda -- ya no hay que adivinarlo desde acá.
+function nombreRemitente(msg) {
+  if (msg.senderType === 'customer') return 'Tú';
+  return msg.senderName || 'Soporte';
+}
+
 async function pintarMensaje(msg) {
   const div = document.createElement('div');
   div.className = 'msg mb-2 pb-2 border-bottom';
-  const quien = msg.senderType === 'customer' ? 'Cliente (yo)' : msg.senderType;
+  const quien = nombreRemitente(msg);
   const cuerpo = ['image', 'audio', 'file', 'document'].includes(msg.type)
     ? `[archivo adjunto: ${(msg.attachments || []).map((a) => a.originalFilename).join(', ')}] ${msg.content || ''}`
     : msg.content;

@@ -240,6 +240,19 @@ async function cargarMensajes(id) {
   Api.markRead(id).catch(() => {});
 }
 
+// Antes esto siempre mostraba "Agente" para cualquier senderType
+// support_agent, sin importar quién -- pedido explícito: diferenciar un
+// agente real (por nombre, buscándolo en agentsCache) de "sistema-
+// facturacion" (el senderId fijo que usa invoiceService.js del backend para
+// las facturas que llegan como mensaje, ver mirrorInvoiceAsMessage).
+function nombreRemitenteMensaje(m) {
+  // El backend ya manda el nombre real en senderName (agente real, "Sistema
+  // de Facturación" o "Asistente Virtual" -- ver computeSenderName en
+  // messageService.js). Ya no hace falta buscarlo acá con agentsCache.
+  if (m.senderType !== 'support_agent') return m.senderName || SENDER_LABEL_ES[m.senderType] || m.senderType;
+  return m.senderName || 'Agente';
+}
+
 function construirBurbuja(m) {
   const div = document.createElement('div');
   div.className = `msg-row ${m.senderType !== 'customer' ? 'mine' : ''}`;
@@ -261,7 +274,7 @@ function construirBurbuja(m) {
   }
 
   div.innerHTML = `
-    <div class="msg-meta">${SENDER_LABEL_ES[m.senderType] || m.senderType}</div>
+    <div class="msg-meta">${escapeHtml(nombreRemitenteMensaje(m))}</div>
     ${contenidoHtml}
     <div class="msg-meta">${formatearHora(m.createdAt)}</div>`;
 
@@ -509,6 +522,7 @@ function textoContactoAgente(agente) {
 // ---------------------------------------------------------------
 let colaAdjuntos = []; // { id, kind: 'file'|'contacto', file?, category?, agente?, previewUrl? }
 let tipoColaActual = null; // 'documento' | 'fotos' | 'audio' | 'contacto' -- para que "Agregar más" sepa qué picker reabrir
+let indicePrincipal = 0; // cuál de la cola se ve grande arriba (el resto son miniaturas)
 
 function idCorto() {
   return Math.random().toString(36).slice(2);
@@ -532,6 +546,7 @@ function abrirVistaPrevia(tipo) {
   // aparte para un caso raro (mandar varias tarjetas de contacto juntas), acá
   // simplemente no se ofrece "agregar más" en ese caso.
   document.getElementById('btn-agregar-mas-adjuntos').classList.toggle('d-none', tipo === 'contacto');
+  indicePrincipal = colaAdjuntos.length - 1;
   actualizarTituloVistaPrevia();
   renderColaAdjuntos();
 }
@@ -557,38 +572,85 @@ function quitarDeCola(id) {
     cerrarVistaPrevia();
     return;
   }
+  if (indicePrincipal >= colaAdjuntos.length) indicePrincipal = colaAdjuntos.length - 1;
   actualizarTituloVistaPrevia();
   renderColaAdjuntos();
 }
 
+// Adjunto "genérico" (documento/audio): mismo bloque icono+nombre en la
+// vista grande y en la miniatura, solo cambia el tamaño de fuente.
+function construirVistaGenerica(it, chico) {
+  const icono = it.kind === 'contacto' ? 'bi-person-fill' : it.file.type.startsWith('audio/') ? 'bi-headphones' : 'bi-file-earmark-text-fill';
+  const nombre = it.kind === 'contacto' ? it.agente.full_name : it.file.name;
+  if (chico) {
+    return `<div class="miniatura-generica"><i class="bi ${icono}"></i></div>`;
+  }
+  return `<div class="d-flex flex-column align-items-center gap-2 text-center p-4">
+    <i class="bi ${icono}" style="font-size:3rem;"></i>
+    <span class="text-truncate" style="max-width:280px;">${escapeHtml(nombre)}</span>
+  </div>`;
+}
+
 function renderColaAdjuntos() {
-  const cont = document.getElementById('lista-cola-adjuntos');
-  cont.innerHTML = colaAdjuntos
-    .map((it) => {
-      let previewHtml;
-      if (it.kind === 'contacto') {
-        previewHtml = `<div class="d-flex align-items-center gap-2 p-2 bg-body-tertiary rounded-3">
-          <span class="adjuntar-icono icono-contacto"><i class="bi bi-person-fill"></i></span>
-          <span class="text-truncate">
-            <span class="d-block small">${escapeHtml(it.agente.full_name)}</span>
-            <span class="d-block text-secondary" style="font-size:0.7rem;">${escapeHtml(ROLE_LABEL_ES[it.agente.role] || it.agente.role)}</span>
-          </span>
-        </div>`;
-      } else if (it.previewUrl) {
-        previewHtml = `<img src="${it.previewUrl}" class="img-fluid rounded-3" style="max-height:220px;" />`;
-      } else if (it.file.type.startsWith('audio/')) {
-        previewHtml = `<div class="d-flex align-items-center gap-2 p-2 bg-body-tertiary rounded-3"><i class="bi bi-headphones fs-4"></i> <span class="small text-truncate">${escapeHtml(it.file.name)}</span></div>`;
-      } else {
-        previewHtml = `<div class="d-flex align-items-center gap-2 p-2 bg-body-tertiary rounded-3"><i class="bi bi-file-earmark-text-fill fs-4"></i> <span class="small text-truncate">${escapeHtml(it.file.name)}</span></div>`;
-      }
-      return `<div class="d-flex align-items-start gap-2 mb-2" data-cola-id="${it.id}">
-        <div class="flex-fill">${previewHtml}</div>
-        <button type="button" class="btn btn-sm btn-outline-danger btn-quitar-cola" data-cola-id="${it.id}" title="Quitar"><i class="bi bi-x"></i></button>
+  const principal = document.getElementById('vista-previa-principal');
+  const miniaturas = document.getElementById('vista-previa-miniaturas');
+  const btnEditar = document.getElementById('btn-editar-adjunto-principal');
+  const item = colaAdjuntos[indicePrincipal];
+  if (!item) return;
+
+  if (item.kind === 'contacto') {
+    principal.innerHTML = `<div class="d-flex align-items-center gap-3 p-4 bg-body-tertiary rounded-3">
+      <span class="adjuntar-icono icono-contacto" style="width:56px;height:56px;font-size:1.5rem;"><i class="bi bi-person-fill"></i></span>
+      <span>
+        <span class="d-block">${escapeHtml(item.agente.full_name)}</span>
+        <span class="d-block text-secondary small">${escapeHtml(ROLE_LABEL_ES[item.agente.role] || item.agente.role)}</span>
+      </span>
+    </div>`;
+    btnEditar.classList.add('d-none');
+  } else if (item.previewUrl) {
+    principal.innerHTML = `<img src="${item.previewUrl}" class="mw-100 mh-100" style="object-fit:contain;" />`;
+    btnEditar.classList.remove('d-none');
+    btnEditar.onclick = () => {
+      EditorImagen.abrir(
+        item.file,
+        (nuevoArchivo) => {
+          if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+          item.file = nuevoArchivo;
+          item.previewUrl = URL.createObjectURL(nuevoArchivo);
+          renderColaAdjuntos();
+        },
+        () => {}
+      );
+    };
+  } else {
+    principal.innerHTML = construirVistaGenerica(item, false);
+    btnEditar.classList.add('d-none');
+  }
+
+  // El "+" para agregar más ya vive en la barra de abajo (btn-agregar-mas-adjuntos)
+  // -- acá cada miniatura solo necesita su propia X para sacarla de la cola,
+  // sin depender de cuál esté seleccionada como principal.
+  miniaturas.innerHTML = colaAdjuntos
+    .map((it, i) => {
+      const contenido = it.previewUrl ? `<img src="${it.previewUrl}" alt="" />` : construirVistaGenerica(it, true);
+      return `<div class="position-relative" style="flex-shrink:0;">
+        <div class="miniatura-cola ${i === indicePrincipal ? 'activa' : ''}" data-idx="${i}">${contenido}</div>
+        <button type="button" class="btn-quitar-miniatura" data-cola-id="${it.id}" title="Quitar">×</button>
       </div>`;
     })
     .join('');
-  cont.querySelectorAll('.btn-quitar-cola').forEach((btn) => {
-    btn.addEventListener('click', () => quitarDeCola(btn.dataset.colaId));
+
+  miniaturas.querySelectorAll('.miniatura-cola').forEach((el) => {
+    el.addEventListener('click', () => {
+      indicePrincipal = Number(el.dataset.idx);
+      renderColaAdjuntos();
+    });
+  });
+  miniaturas.querySelectorAll('.btn-quitar-miniatura').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      quitarDeCola(btn.dataset.colaId);
+    });
   });
 }
 
@@ -1064,4 +1126,11 @@ SocketHandlers.onHandoff = () => onEventoRealtime('conversation:handoff', () => 
 // ---------------------------------------------------------------
 conectarSocket();
 cargarClientes(true);
+// Precarga temprana (no bloqueante) para que construirBurbuja pueda mostrar
+// el nombre real del agente desde el primer mensaje que se renderiza, no
+// solo después de abrir una conversación (que es cuando cargarPanelLateral
+// la habría cargado de otra forma).
+Api.listAgents(true)
+  .then((r) => { agentsCache = r.data; })
+  .catch(() => {});
 actualizarVistaMovil();

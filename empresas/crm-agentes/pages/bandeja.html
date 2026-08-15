@@ -90,15 +90,19 @@
 
           <!-- Vista previa antes de enviar, estilo WhatsApp (pedido explícito,
                2026-08): elegir un archivo ya NO lo sube directo -- se encola
-               acá, se puede agregar más, sacar alguno, escribir un comentario,
-               y recién ahí Enviar o Cancelar. Sin herramientas de edición de
-               imagen (eso quedó fuera de alcance a propósito). -->
+               acá, se puede agregar más, sacar alguno, editar la imagen
+               (recortar/dibujar/texto/rotar, ver editor-imagen.js), escribir
+               un comentario, y recién ahí Enviar o Cancelar. -->
           <div id="vista-previa-adjuntos" class="d-none flex-column position-absolute top-0 start-0 w-100 h-100 bg-body">
             <div class="p-2 border-bottom d-flex align-items-center gap-2">
               <button type="button" id="btn-cerrar-vista-previa" class="btn btn-sm btn-outline-secondary"><i class="bi bi-x-lg"></i></button>
               <span class="small text-secondary" id="titulo-vista-previa">Enviar</span>
+              <button type="button" id="btn-editar-adjunto-principal" class="btn btn-sm btn-outline-secondary ms-auto d-none">
+                <i class="bi bi-pencil-fill"></i> Editar
+              </button>
             </div>
-            <div id="lista-cola-adjuntos" class="flex-fill overflow-auto p-3"></div>
+            <div id="vista-previa-principal" class="flex-fill d-flex align-items-center justify-content-center overflow-hidden p-2"></div>
+            <div id="vista-previa-miniaturas" class="d-flex align-items-center gap-2 px-2 pb-2 overflow-auto" style="flex-shrink:0;"></div>
             <form id="form-enviar-adjuntos" class="border-top p-2 d-flex align-items-end gap-2">
               <button type="button" id="btn-agregar-mas-adjuntos" class="btn btn-icon-round" title="Agregar más"><i class="bi bi-plus-lg"></i></button>
               <textarea id="texto-vista-previa" class="form-control composer-input" rows="1" placeholder="Agregar un comentario..."></textarea>
@@ -257,6 +261,26 @@
     </main>
   </div>
 
+  <!-- Editor de imagen (rotar/recortar/dibujar/texto), estilo WhatsApp --
+       pedido explícito, 2026-08. Alcance acotado a propósito: sin capas,
+       deshacer, filtros ni stickers -- ver editor-imagen.js. -->
+  <div id="editor-imagen" class="d-none flex-column position-fixed top-0 start-0 w-100 h-100" style="z-index: 2000; background-color: #000;">
+    <div class="p-2 d-flex align-items-center gap-2 border-bottom border-secondary">
+      <button type="button" id="btn-cerrar-editor" class="btn btn-sm btn-outline-light"><i class="bi bi-x-lg"></i></button>
+      <div class="d-flex gap-1 ms-auto">
+        <button type="button" class="btn btn-sm btn-outline-light herramienta-editor" data-herramienta="rotar" title="Rotar"><i class="bi bi-arrow-clockwise"></i></button>
+        <button type="button" class="btn btn-sm btn-outline-light herramienta-editor" data-herramienta="recortar" title="Recortar"><i class="bi bi-crop"></i></button>
+        <button type="button" class="btn btn-sm btn-outline-light herramienta-editor" data-herramienta="dibujar" title="Dibujar"><i class="bi bi-pencil-fill"></i></button>
+        <button type="button" class="btn btn-sm btn-outline-light herramienta-editor" data-herramienta="texto" title="Añadir texto"><i class="bi bi-fonts"></i></button>
+      </div>
+      <button type="button" id="btn-guardar-edicion" class="btn btn-sm btn-success">Listo</button>
+    </div>
+    <div id="panel-opciones-editor" class="d-none p-2 align-items-center gap-2 border-bottom border-secondary"></div>
+    <div id="lienzo-contenedor" class="flex-fill d-flex align-items-center justify-content-center overflow-hidden">
+      <canvas id="lienzo-editor" style="touch-action: none; cursor: crosshair;"></canvas>
+    </div>
+  </div>
+
   <!-- Historial de facturación del cliente de la conversación abierta --
        pedido explícito: acceder fácil a "cómo se le mandó su facturación"
        sin salir del chat ni ir a buscarlo a mano en la pestaña Facturación. -->
@@ -306,6 +330,7 @@
   <script src="../js/labels.js"></script>
   <script src="../js/notificaciones.js"></script>
   <script src="../js/socket.js"></script>
+  <script src="../js/editor-imagen.js"></script>
   <script src="../js/bandeja.js"></script>
 </body>
 </html>
