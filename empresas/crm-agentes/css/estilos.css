@@ -101,6 +101,12 @@ body {
   border-radius: 1rem;
   padding: 0.4rem 0.65rem;
   font-size: 0.82rem;
+  /* Sin esto HTML colapsa los saltos de línea del content en espacios --
+     un mensaje de varias líneas (plantillas de factura, etc.) salía todo
+     corrido en un solo párrafo. Mismo fix que ya tiene MessageBubble.tsx
+     (whitespace-pre-wrap) en el CRM de React. */
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
 }
 .msg-bubble.customer { background-color: var(--bs-tertiary-bg); }
 .msg-bubble.support_agent { background-color: #198754; color: #fff; }
@@ -123,6 +129,21 @@ body {
   min-width: 190px;
 }
 .msg-meta { font-size: 0.7rem; color: var(--bs-secondary-color); margin-bottom: 0.15rem; }
+
+/* Separador de fecha estilo WhatsApp -- "Hoy"/"Ayer"/fecha, entre grupos de
+   mensajes de días distintos (ver construirDivisorFecha en bandeja.js). */
+.divisor-fecha { display: flex; justify-content: center; margin: 0.75rem 0; }
+.divisor-fecha span {
+  background-color: var(--bs-tertiary-bg);
+  color: var(--bs-secondary-color);
+  font-size: 0.7rem;
+  padding: 0.2rem 0.75rem;
+  border-radius: 1rem;
+}
+
+/* Buscador dentro de la conversación (ver btn-buscar-mensajes en bandeja.js) */
+.msg-row.resultado-busqueda .msg-bubble { outline: 2px solid #ffc107; }
+.msg-row.resultado-busqueda-activo .msg-bubble { outline: 2px solid #fd7e14; }
 
 /* Columna 3: detalles/notas -- siempre visible en escritorio, pantalla
    aparte en móvil. */

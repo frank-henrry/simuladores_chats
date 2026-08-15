@@ -86,6 +86,12 @@ const Api = {
   listInvoices: (params) => apiFetch(`/support/invoices${qs(params)}`),
   markInvoicePaid: (invoiceId) => apiFetch(`/support/invoices/${invoiceId}/mark-paid`, { method: 'PATCH' }),
 
+  // Plantillas de los mensajes de factura enviada/pagada (editables desde
+  // el propio front, sin tocar el .txt a mano en el servidor)
+  listMessageTemplates: () => apiFetch('/support/message-templates'),
+  updateMessageTemplate: (name, content) =>
+    apiFetch(`/support/message-templates/${encodeURIComponent(name)}`, { method: 'PUT', body: JSON.stringify({ content }) }),
+
   // Auditoría
   listAuditEvents: (params) => apiFetch(`/support/audit-events${qs(params)}`),
 

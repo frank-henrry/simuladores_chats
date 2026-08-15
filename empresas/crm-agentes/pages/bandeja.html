@@ -58,7 +58,7 @@
           <p class="small text-uppercase mt-2">Selecciona un cliente</p>
         </div>
 
-        <div id="chat-contenido" class="d-none flex-column h-100">
+        <div id="chat-contenido" class="d-none flex-column h-100 position-relative">
           <div class="border-bottom p-2 d-flex align-items-center justify-content-between">
             <div class="d-flex align-items-center gap-2 min-w-0">
               <button id="btn-volver-clientes" class="btn btn-sm btn-outline-secondary d-md-none"><i class="bi bi-arrow-left"></i></button>
@@ -67,6 +67,7 @@
               <span id="chat-badge-modo" class="d-none d-sm-inline"></span>
             </div>
             <div class="d-flex align-items-center gap-2">
+              <button id="btn-buscar-mensajes" class="btn btn-sm btn-outline-secondary" title="Buscar en la conversación"><i class="bi bi-search"></i></button>
               <button id="btn-resolver" class="btn btn-sm btn-success d-none">
                 <i class="bi bi-check-circle"></i> <span class="d-none d-sm-inline">Marcar resuelto</span>
               </button>
@@ -74,9 +75,36 @@
             </div>
           </div>
 
+          <div id="barra-busqueda-mensajes" class="d-none border-bottom p-2">
+            <div class="input-group input-group-sm">
+              <span class="input-group-text"><i class="bi bi-search"></i></span>
+              <input type="text" id="input-buscar-mensajes" class="form-control" placeholder="Buscar en esta conversación..." />
+              <button type="button" id="btn-cerrar-busqueda" class="btn btn-outline-secondary"><i class="bi bi-x-lg"></i></button>
+            </div>
+            <div id="resultado-busqueda-mensajes" class="small text-secondary mt-1"></div>
+          </div>
+
           <div id="mensajes"></div>
 
           <div id="escribiendo" class="px-3 small text-success fst-italic d-none">Escribiendo...</div>
+
+          <!-- Vista previa antes de enviar, estilo WhatsApp (pedido explícito,
+               2026-08): elegir un archivo ya NO lo sube directo -- se encola
+               acá, se puede agregar más, sacar alguno, escribir un comentario,
+               y recién ahí Enviar o Cancelar. Sin herramientas de edición de
+               imagen (eso quedó fuera de alcance a propósito). -->
+          <div id="vista-previa-adjuntos" class="d-none flex-column position-absolute top-0 start-0 w-100 h-100 bg-body">
+            <div class="p-2 border-bottom d-flex align-items-center gap-2">
+              <button type="button" id="btn-cerrar-vista-previa" class="btn btn-sm btn-outline-secondary"><i class="bi bi-x-lg"></i></button>
+              <span class="small text-secondary" id="titulo-vista-previa">Enviar</span>
+            </div>
+            <div id="lista-cola-adjuntos" class="flex-fill overflow-auto p-3"></div>
+            <form id="form-enviar-adjuntos" class="border-top p-2 d-flex align-items-end gap-2">
+              <button type="button" id="btn-agregar-mas-adjuntos" class="btn btn-icon-round" title="Agregar más"><i class="bi bi-plus-lg"></i></button>
+              <textarea id="texto-vista-previa" class="form-control composer-input" rows="1" placeholder="Agregar un comentario..."></textarea>
+              <button type="submit" class="btn btn-icon-round btn-enviar-activo" title="Enviar"><i class="bi bi-send-fill"></i></button>
+            </form>
+          </div>
 
           <form id="form-enviar" class="border-top p-2">
             <div id="composer-normal" class="composer-bar d-flex align-items-end gap-2">
@@ -84,7 +112,7 @@
                 <button type="button" id="btn-menu-adjuntar" class="btn btn-icon-round" data-bs-toggle="dropdown" aria-expanded="false" title="Adjuntar">
                   <i class="bi bi-plus-lg"></i>
                 </button>
-                <div class="dropdown-menu dropdown-menu-dark p-1 menu-adjuntar" style="min-width: 190px;">
+                <div class="dropdown-menu dropdown-menu-dark p-1 menu-adjuntar" data-bs-auto-close="outside" style="min-width: 190px;">
                   <!-- Vista 1: opciones (igual a WhatsApp, sin cámara/encuesta/evento/sticker) -->
                   <div id="vista-adjuntar-opciones">
                     <button type="button" class="dropdown-item d-flex align-items-center gap-2 rounded-3 py-1" id="opt-documento">
@@ -131,9 +159,9 @@
                   </div>
                 </div>
 
-                <input type="file" id="input-archivo" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain" class="d-none" />
-                <input type="file" id="input-fotos" accept="image/*,video/*" class="d-none" />
-                <input type="file" id="input-audio" accept="audio/*" class="d-none" />
+                <input type="file" id="input-archivo" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/plain" class="d-none" multiple />
+                <input type="file" id="input-fotos" accept="image/*,video/*" class="d-none" multiple />
+                <input type="file" id="input-audio" accept="audio/*" class="d-none" multiple />
               </div>
 
               <textarea id="mensaje-texto" class="form-control composer-input" rows="1" placeholder="Escribe un mensaje"></textarea>
@@ -211,7 +239,10 @@
           <h6 class="text-uppercase small text-secondary"><i class="bi bi-person"></i> Cliente y pagos</h6>
           <div class="small mb-2">ID externo: <span id="detalle-ruc" class="font-monospace"></span></div>
           <div id="detalle-conversaciones" class="small mb-2"></div>
-          <div id="detalle-finanzas" class="small"></div>
+          <div id="detalle-finanzas" class="small mb-2"></div>
+          <button id="btn-historial-facturas" type="button" class="btn btn-sm btn-outline-secondary w-100" data-bs-toggle="modal" data-bs-target="#modal-historial-facturas">
+            <i class="bi bi-receipt"></i> Ver historial de facturación
+          </button>
         </div>
 
         <div id="panel-notas" class="p-3 d-none d-flex flex-column h-100">
@@ -224,6 +255,38 @@
         </div>
       </div>
     </main>
+  </div>
+
+  <!-- Historial de facturación del cliente de la conversación abierta --
+       pedido explícito: acceder fácil a "cómo se le mandó su facturación"
+       sin salir del chat ni ir a buscarlo a mano en la pestaña Facturación. -->
+  <div class="modal fade" id="modal-historial-facturas" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="modal-title h6">Historial de facturación</h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="table-responsive">
+            <table class="table table-sm table-hover align-middle mb-0">
+              <thead>
+                <tr>
+                  <th>N° factura</th>
+                  <th>Monto</th>
+                  <th>Vence</th>
+                  <th>Estado</th>
+                  <th>Recibida</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="cuerpo-historial-facturas"></tbody>
+            </table>
+          </div>
+          <p id="vacio-historial-facturas" class="text-secondary fst-italic d-none mb-0">Sin facturas registradas para este cliente.</p>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="toast-container"></div>

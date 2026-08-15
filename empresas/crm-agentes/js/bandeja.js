@@ -181,6 +181,8 @@ async function abrirConversacion(id) {
   renderEncabezadoChat();
   unirseAConversacion(id);
   Notificaciones.marcarLeidasPorConversacion(id);
+  document.getElementById('barra-busqueda-mensajes').classList.add('d-none');
+  limpiarBusqueda();
   await cargarMensajes(id);
   await cargarPanelLateral();
 }
@@ -197,11 +199,43 @@ function renderEncabezadoChat() {
   document.getElementById('btn-resolver').classList.toggle('d-none', c.attentionMode !== 'human');
 }
 
+// Estilo WhatsApp: en la burbuja solo va la hora -- la fecha se saca a un
+// separador aparte que cambia según el día del mensaje (Hoy/Ayer/fecha).
+function etiquetaFecha(fechaIso) {
+  const d = new Date(fechaIso);
+  const hoy = new Date();
+  const ayer = new Date(hoy);
+  ayer.setDate(hoy.getDate() - 1);
+  const mismoDia = (a, b) => a.toDateString() === b.toDateString();
+  if (mismoDia(d, hoy)) return 'Hoy';
+  if (mismoDia(d, ayer)) return 'Ayer';
+  return d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+function formatearHora(fechaIso) {
+  return new Date(fechaIso).toLocaleTimeString('es-PE', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
+function construirDivisorFecha(etiqueta) {
+  const div = document.createElement('div');
+  div.className = 'divisor-fecha';
+  div.innerHTML = `<span>${escapeHtml(etiqueta)}</span>`;
+  return div;
+}
+
 async function cargarMensajes(id) {
   const { data: mensajes } = await Api.listMessages(id, { limit: 50 });
   const cont = document.getElementById('mensajes');
   cont.innerHTML = '';
-  mensajes.forEach((m) => cont.appendChild(construirBurbuja(m)));
+  let fechaAnterior = null;
+  mensajes.forEach((m) => {
+    const etiqueta = etiquetaFecha(m.createdAt);
+    if (etiqueta !== fechaAnterior) {
+      cont.appendChild(construirDivisorFecha(etiqueta));
+      fechaAnterior = etiqueta;
+    }
+    cont.appendChild(construirBurbuja(m));
+  });
   cont.scrollTop = cont.scrollHeight;
   Api.markRead(id).catch(() => {});
 }
@@ -210,6 +244,7 @@ function construirBurbuja(m) {
   const div = document.createElement('div');
   div.className = `msg-row ${m.senderType !== 'customer' ? 'mine' : ''}`;
   div.dataset.messageId = m.id;
+  div.dataset.textoBusqueda = (m.content || '').toLowerCase();
 
   const esMio = m.senderType === 'support_agent' && m.senderId === getAgent()?.id;
   const puedeBorrar = esMio && !m.deletedAt;
@@ -228,7 +263,7 @@ function construirBurbuja(m) {
   div.innerHTML = `
     <div class="msg-meta">${SENDER_LABEL_ES[m.senderType] || m.senderType}</div>
     ${contenidoHtml}
-    <div class="msg-meta">${new Date(m.createdAt).toLocaleString()}</div>`;
+    <div class="msg-meta">${formatearHora(m.createdAt)}</div>`;
 
   // Eliminar por clic derecho (o mantener presionado en móvil) sobre la
   // burbuja, estilo WhatsApp -- en vez de un ícono de basura siempre visible.
@@ -254,6 +289,75 @@ function construirBurbuja(m) {
   }
   return div;
 }
+
+// ---------------------------------------------------------------
+// Buscador dentro de la conversación (pedido explícito, 2026-08) -- busca
+// solo en el texto ya cargado (los mismos 50 mensajes que trae cargarMensajes,
+// no pide más al backend), resalta coincidencias y navega entre ellas con
+// Enter/Shift+Enter, igual que el buscador de WhatsApp.
+// ---------------------------------------------------------------
+let coincidenciasBusqueda = [];
+let indiceBusquedaActual = -1;
+
+function limpiarBusqueda() {
+  document.getElementById('input-buscar-mensajes').value = '';
+  document.querySelectorAll('#mensajes .msg-row').forEach((row) => {
+    row.classList.remove('resultado-busqueda', 'resultado-busqueda-activo');
+  });
+  document.getElementById('resultado-busqueda-mensajes').textContent = '';
+  coincidenciasBusqueda = [];
+  indiceBusquedaActual = -1;
+}
+
+function irAResultadoActual() {
+  document.querySelectorAll('#mensajes .msg-row.resultado-busqueda-activo').forEach((r) => r.classList.remove('resultado-busqueda-activo'));
+  if (indiceBusquedaActual < 0) return;
+  const row = coincidenciasBusqueda[indiceBusquedaActual];
+  row.classList.add('resultado-busqueda-activo');
+  row.scrollIntoView({ block: 'center', behavior: 'smooth' });
+}
+
+function ejecutarBusqueda(termino) {
+  document.querySelectorAll('#mensajes .msg-row').forEach((row) => row.classList.remove('resultado-busqueda', 'resultado-busqueda-activo'));
+  const contador = document.getElementById('resultado-busqueda-mensajes');
+  const texto = termino.trim().toLowerCase();
+  if (!texto) {
+    coincidenciasBusqueda = [];
+    indiceBusquedaActual = -1;
+    contador.textContent = '';
+    return;
+  }
+  coincidenciasBusqueda = Array.from(document.querySelectorAll('#mensajes .msg-row')).filter((row) =>
+    (row.dataset.textoBusqueda || '').includes(texto)
+  );
+  coincidenciasBusqueda.forEach((row) => row.classList.add('resultado-busqueda'));
+  indiceBusquedaActual = coincidenciasBusqueda.length ? 0 : -1;
+  irAResultadoActual();
+  contador.textContent = coincidenciasBusqueda.length ? `${indiceBusquedaActual + 1} de ${coincidenciasBusqueda.length}` : 'Sin resultados';
+}
+
+document.getElementById('btn-buscar-mensajes').addEventListener('click', () => {
+  const barra = document.getElementById('barra-busqueda-mensajes');
+  barra.classList.toggle('d-none');
+  if (!barra.classList.contains('d-none')) document.getElementById('input-buscar-mensajes').focus();
+  else limpiarBusqueda();
+});
+document.getElementById('btn-cerrar-busqueda').addEventListener('click', () => {
+  document.getElementById('barra-busqueda-mensajes').classList.add('d-none');
+  limpiarBusqueda();
+});
+let busquedaTimeout = null;
+document.getElementById('input-buscar-mensajes').addEventListener('input', (e) => {
+  clearTimeout(busquedaTimeout);
+  busquedaTimeout = setTimeout(() => ejecutarBusqueda(e.target.value), 200);
+});
+document.getElementById('input-buscar-mensajes').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || !coincidenciasBusqueda.length) return;
+  e.preventDefault();
+  indiceBusquedaActual = (indiceBusquedaActual + (e.shiftKey ? -1 : 1) + coincidenciasBusqueda.length) % coincidenciasBusqueda.length;
+  irAResultadoActual();
+  document.getElementById('resultado-busqueda-mensajes').textContent = `${indiceBusquedaActual + 1} de ${coincidenciasBusqueda.length}`;
+});
 
 // ---------------------------------------------------------------
 // Menú contextual de mensaje (clic derecho / mantener presionado), estilo
@@ -383,52 +487,146 @@ function cerrarMenuAdjuntar() {
 // en Documento/Contacto la próxima vez que lo abran.
 document.getElementById('btn-menu-adjuntar').addEventListener('hidden.bs.dropdown', () => mostrarVistaAdjuntar('opciones'));
 
-async function subirArchivoComposer(file, category) {
+async function subirArchivoComposer(file, category, caption) {
   const form = new FormData();
   form.append('file', file);
   form.append('category', category);
   form.append('clientMessageId', crypto.randomUUID());
-  try {
-    await Api.uploadAttachment(conversationId, form);
-  } catch (err) {
-    mostrarToast(err.message || 'No se pudo adjuntar el archivo', 'danger');
+  if (caption) form.append('message', caption);
+  await Api.uploadAttachment(conversationId, form);
+}
+
+function textoContactoAgente(agente) {
+  return `📇 Contacto de soporte\nNombre: ${agente.full_name}\nÁrea: ${ROLE_LABEL_ES[agente.role] || agente.role}\nCorreo: ${agente.email}`;
+}
+
+// ---------------------------------------------------------------
+// Cola de adjuntos con vista previa, estilo WhatsApp (pedido explícito,
+// 2026-08): elegir un archivo ya NO lo sube directo -- se agrega acá, se
+// puede sumar más, sacar alguno, escribir un comentario, y recién con
+// "Enviar" se sube todo. Sin herramientas de edición de imagen (recortar/
+// dibujar/texto encima) -- eso quedó fuera de alcance a propósito.
+// ---------------------------------------------------------------
+let colaAdjuntos = []; // { id, kind: 'file'|'contacto', file?, category?, agente?, previewUrl? }
+let tipoColaActual = null; // 'documento' | 'fotos' | 'audio' | 'contacto' -- para que "Agregar más" sepa qué picker reabrir
+
+function idCorto() {
+  return Math.random().toString(36).slice(2);
+}
+
+function actualizarTituloVistaPrevia() {
+  const n = colaAdjuntos.length;
+  document.getElementById('titulo-vista-previa').textContent = n === 1 ? 'Enviar 1 elemento' : `Enviar ${n} elementos`;
+}
+
+function abrirVistaPrevia(tipo) {
+  tipoColaActual = tipo;
+  cerrarMenuAdjuntar();
+  const panel = document.getElementById('vista-previa-adjuntos');
+  panel.classList.remove('d-none');
+  panel.classList.add('d-flex');
+  document.getElementById('mensajes').classList.add('d-none');
+  document.getElementById('form-enviar').classList.add('d-none');
+  // Agregar otro contacto reabriría el dropdown del composer, que queda
+  // oculto mientras la vista previa está activa -- para no armar un mecanismo
+  // aparte para un caso raro (mandar varias tarjetas de contacto juntas), acá
+  // simplemente no se ofrece "agregar más" en ese caso.
+  document.getElementById('btn-agregar-mas-adjuntos').classList.toggle('d-none', tipo === 'contacto');
+  actualizarTituloVistaPrevia();
+  renderColaAdjuntos();
+}
+
+function cerrarVistaPrevia() {
+  colaAdjuntos.forEach((it) => { if (it.previewUrl) URL.revokeObjectURL(it.previewUrl); });
+  colaAdjuntos = [];
+  tipoColaActual = null;
+  const panel = document.getElementById('vista-previa-adjuntos');
+  panel.classList.add('d-none');
+  panel.classList.remove('d-flex');
+  document.getElementById('mensajes').classList.remove('d-none');
+  document.getElementById('form-enviar').classList.remove('d-none');
+  document.getElementById('texto-vista-previa').value = '';
+}
+
+function quitarDeCola(id) {
+  const idx = colaAdjuntos.findIndex((it) => it.id === id);
+  if (idx === -1) return;
+  if (colaAdjuntos[idx].previewUrl) URL.revokeObjectURL(colaAdjuntos[idx].previewUrl);
+  colaAdjuntos.splice(idx, 1);
+  if (colaAdjuntos.length === 0) {
+    cerrarVistaPrevia();
+    return;
   }
+  actualizarTituloVistaPrevia();
+  renderColaAdjuntos();
+}
+
+function renderColaAdjuntos() {
+  const cont = document.getElementById('lista-cola-adjuntos');
+  cont.innerHTML = colaAdjuntos
+    .map((it) => {
+      let previewHtml;
+      if (it.kind === 'contacto') {
+        previewHtml = `<div class="d-flex align-items-center gap-2 p-2 bg-body-tertiary rounded-3">
+          <span class="adjuntar-icono icono-contacto"><i class="bi bi-person-fill"></i></span>
+          <span class="text-truncate">
+            <span class="d-block small">${escapeHtml(it.agente.full_name)}</span>
+            <span class="d-block text-secondary" style="font-size:0.7rem;">${escapeHtml(ROLE_LABEL_ES[it.agente.role] || it.agente.role)}</span>
+          </span>
+        </div>`;
+      } else if (it.previewUrl) {
+        previewHtml = `<img src="${it.previewUrl}" class="img-fluid rounded-3" style="max-height:220px;" />`;
+      } else if (it.file.type.startsWith('audio/')) {
+        previewHtml = `<div class="d-flex align-items-center gap-2 p-2 bg-body-tertiary rounded-3"><i class="bi bi-headphones fs-4"></i> <span class="small text-truncate">${escapeHtml(it.file.name)}</span></div>`;
+      } else {
+        previewHtml = `<div class="d-flex align-items-center gap-2 p-2 bg-body-tertiary rounded-3"><i class="bi bi-file-earmark-text-fill fs-4"></i> <span class="small text-truncate">${escapeHtml(it.file.name)}</span></div>`;
+      }
+      return `<div class="d-flex align-items-start gap-2 mb-2" data-cola-id="${it.id}">
+        <div class="flex-fill">${previewHtml}</div>
+        <button type="button" class="btn btn-sm btn-outline-danger btn-quitar-cola" data-cola-id="${it.id}" title="Quitar"><i class="bi bi-x"></i></button>
+      </div>`;
+    })
+    .join('');
+  cont.querySelectorAll('.btn-quitar-cola').forEach((btn) => {
+    btn.addEventListener('click', () => quitarDeCola(btn.dataset.colaId));
+  });
+}
+
+function agregarArchivosACola(fileList, category, tipo) {
+  if (!fileList.length) return;
+  Array.from(fileList).forEach((file) => {
+    const item = { id: idCorto(), kind: 'file', file, category };
+    if (file.type.startsWith('image/')) item.previewUrl = URL.createObjectURL(file);
+    colaAdjuntos.push(item);
+  });
+  abrirVistaPrevia(tipo);
 }
 
 // -- Documento: único caso que sigue pidiendo categoría (comprobante de pago vs. documento genérico) --
 document.getElementById('opt-documento').addEventListener('click', () => mostrarVistaAdjuntar('documento'));
 document.getElementById('btn-volver-documento').addEventListener('click', () => mostrarVistaAdjuntar('opciones'));
 document.getElementById('btn-adjuntar').addEventListener('click', () => document.getElementById('input-archivo').click());
-document.getElementById('input-archivo').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  await subirArchivoComposer(file, document.getElementById('select-categoria-archivo').value);
+document.getElementById('input-archivo').addEventListener('change', (e) => {
+  agregarArchivosACola(e.target.files, document.getElementById('select-categoria-archivo').value, 'documento');
   e.target.value = '';
-  cerrarMenuAdjuntar();
 });
 
-// -- Fotos y videos / Audio: un clic abre el selector nativo filtrado y sube directo --
+// -- Fotos y videos / Audio: un clic abre el selector nativo filtrado --
 document.getElementById('opt-fotos').addEventListener('click', () => document.getElementById('input-fotos').click());
-document.getElementById('input-fotos').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  await subirArchivoComposer(file, 'other');
+document.getElementById('input-fotos').addEventListener('change', (e) => {
+  agregarArchivosACola(e.target.files, 'other', 'fotos');
   e.target.value = '';
-  cerrarMenuAdjuntar();
 });
 
 document.getElementById('opt-audio').addEventListener('click', () => document.getElementById('input-audio').click());
-document.getElementById('input-audio').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  await subirArchivoComposer(file, 'other');
+document.getElementById('input-audio').addEventListener('change', (e) => {
+  agregarArchivosACola(e.target.files, 'other', 'audio');
   e.target.value = '';
-  cerrarMenuAdjuntar();
 });
 
-// -- Contacto: lista de agentes de soporte activos; al elegir uno, se manda
-// como mensaje de texto con su nombre/rol/correo (no existe un tipo de
-// mensaje "contacto" en el backend, así que se manda como texto formateado). --
+// -- Contacto: lista de agentes de soporte activos; al elegir uno se agrega
+// a la cola como una tarjeta -- al enviar se manda como mensaje de texto
+// formateado (no existe un tipo de mensaje "contacto" en el backend). --
 document.getElementById('opt-contacto').addEventListener('click', async () => {
   mostrarVistaAdjuntar('contactos');
   const cont = document.getElementById('lista-contactos-soporte');
@@ -451,20 +649,53 @@ document.getElementById('opt-contacto').addEventListener('click', async () => {
       : '<p class="text-secondary small px-2 mb-0">Sin agentes disponibles.</p>';
 
     cont.querySelectorAll('.btn-elegir-contacto').forEach((btn) => {
-      btn.addEventListener('click', async () => {
+      btn.addEventListener('click', () => {
         const agente = agentsCache.find((a) => a.id === btn.dataset.agentId);
         if (!agente) return;
-        const texto = `📇 Contacto de soporte\nNombre: ${agente.full_name}\nÁrea: ${ROLE_LABEL_ES[agente.role] || agente.role}\nCorreo: ${agente.email}`;
-        try {
-          await Api.sendMessage(conversationId, { clientMessageId: crypto.randomUUID(), content: texto });
-        } catch (err) {
-          mostrarToast(err.message || 'No se pudo enviar el contacto', 'danger');
-        }
-        cerrarMenuAdjuntar();
+        colaAdjuntos.push({ id: idCorto(), kind: 'contacto', agente });
+        abrirVistaPrevia('contacto');
       });
     });
   } catch {
     cont.innerHTML = '<p class="text-danger small px-2 mb-0">No se pudo cargar la lista de agentes.</p>';
+  }
+});
+
+// -- "Agregar más" dentro de la vista previa: reabre el picker que corresponda
+// (oculto para el caso "contacto", ver abrirVistaPrevia) --
+document.getElementById('btn-agregar-mas-adjuntos').addEventListener('click', () => {
+  if (tipoColaActual === 'documento') document.getElementById('input-archivo').click();
+  else if (tipoColaActual === 'fotos') document.getElementById('input-fotos').click();
+  else if (tipoColaActual === 'audio') document.getElementById('input-audio').click();
+});
+
+document.getElementById('btn-cerrar-vista-previa').addEventListener('click', cerrarVistaPrevia);
+
+document.getElementById('form-enviar-adjuntos').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const texto = document.getElementById('texto-vista-previa').value.trim();
+  const items = [...colaAdjuntos];
+  const boton = e.target.querySelector('button[type="submit"]');
+  boton.disabled = true;
+  try {
+    for (let i = 0; i < items.length; i += 1) {
+      const it = items[i];
+      const esUltimo = i === items.length - 1;
+      if (it.kind === 'contacto') {
+        const base = textoContactoAgente(it.agente);
+        await Api.sendMessage(conversationId, {
+          clientMessageId: crypto.randomUUID(),
+          content: esUltimo && texto ? `${base}\n\n${texto}` : base,
+        });
+      } else {
+        await subirArchivoComposer(it.file, it.category, esUltimo ? texto : '');
+      }
+    }
+    cerrarVistaPrevia();
+  } catch (err) {
+    mostrarToast(err.message || 'No se pudo enviar el adjunto', 'danger');
+  } finally {
+    boton.disabled = false;
   }
 });
 
@@ -693,6 +924,50 @@ async function cargarResumenCliente(externalCustomerId) {
     /* el resumen es informativo, no bloquea el resto del panel si falla */
   }
 }
+
+// ---------------------------------------------------------------
+// Historial de facturación del cliente abierto (pedido explícito, 2026-08):
+// mismo endpoint que la pestaña Facturación (Api.listInvoices), filtrado
+// por el RUC de esta conversación -- no hace falta ir a buscarlo a mano.
+// ---------------------------------------------------------------
+document.getElementById('modal-historial-facturas').addEventListener('show.bs.modal', async () => {
+  const cuerpo = document.getElementById('cuerpo-historial-facturas');
+  const vacio = document.getElementById('vacio-historial-facturas');
+  cuerpo.innerHTML = '<tr><td colspan="6" class="text-secondary fst-italic">Cargando...</td></tr>';
+  vacio.classList.add('d-none');
+  try {
+    const { data } = await Api.listInvoices({ externalCustomerId: selectedCustomerId, limit: 50 });
+    vacio.classList.toggle('d-none', data.length > 0);
+    cuerpo.innerHTML = data
+      .map(
+        (inv) => `
+      <tr>
+        <td class="font-monospace small">${escapeHtml(inv.invoiceNumber)}</td>
+        <td>${Number(inv.amount).toFixed(2)} ${escapeHtml(inv.currency)}</td>
+        <td class="small">${inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : '—'}</td>
+        <td><span class="${INVOICE_STATUS_BADGE_CLASS[inv.status] || 'badge bg-secondary'}">${INVOICE_STATUS_LABEL_ES[inv.status] || inv.status}</span></td>
+        <td class="small text-secondary">${new Date(inv.createdAt).toLocaleString()}</td>
+        <td class="text-end">
+          <button class="btn btn-sm btn-outline-secondary btn-descargar-historial" data-invoice-id="${inv.id}" data-filename="${escapeHtml(inv.originalFilename || inv.invoiceNumber)}" title="Descargar PDF">
+            <i class="bi bi-download"></i>
+          </button>
+        </td>
+      </tr>`
+      )
+      .join('');
+    cuerpo.querySelectorAll('.btn-descargar-historial').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        Api.downloadBlob(`/support/invoices/${btn.dataset.invoiceId}/download`, btn.dataset.filename).catch((err) =>
+          mostrarToast(err.message || 'No se pudo descargar la factura', 'danger')
+        );
+      });
+    });
+  } catch (err) {
+    cuerpo.innerHTML = '';
+    vacio.classList.remove('d-none');
+    vacio.textContent = err.message || 'No se pudo cargar el historial de facturación.';
+  }
+});
 
 // ---- Notas internas ----
 async function cargarNotas() {

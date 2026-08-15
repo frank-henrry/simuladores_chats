@@ -25,7 +25,12 @@
     </header>
 
     <main class="p-3 overflow-auto" style="flex:1;">
-      <h1 class="h5 mb-3">Facturas recibidas</h1>
+      <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+        <h1 class="h5 mb-0">Facturas recibidas</h1>
+        <button id="btn-plantillas" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modal-plantillas">
+          <i class="bi bi-pencil-square"></i> Mensajes de factura enviada/pagada
+        </button>
+      </div>
 
       <div id="alerta-permiso" class="alert alert-warning d-none">
         Tu sesión no tiene el permiso de facturación (fue agregado después de tu último ingreso).
@@ -61,6 +66,37 @@
       <p id="vacio-facturas" class="text-secondary fst-italic d-none">Sin facturas para este filtro.</p>
       <button id="btn-mas-facturas" class="btn btn-sm btn-link d-none">Cargar más</button>
     </main>
+  </div>
+
+  <!-- Editor de plantillas: texto que se manda como mensaje de chat cuando
+       llega una factura nueva o se marca como pagada. Se guarda en un .txt
+       en el servidor (plantillas-mensajes/), este modal solo lo lee/escribe
+       por la API -- también se puede editar el archivo directo si hace falta. -->
+  <div class="modal fade" id="modal-plantillas" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 class="modal-title h6">Mensajes de factura enviada/pagada</h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <select id="select-plantilla" class="form-select form-select-sm mb-2">
+            <option value="factura-enviada.txt">Factura enviada (al recibirse la factura)</option>
+            <option value="factura-pagada.txt">Factura pagada (al marcarla como pagada)</option>
+          </select>
+          <textarea id="texto-plantilla" class="form-control font-monospace" rows="12" style="font-size:0.82rem;"></textarea>
+          <div class="form-text">
+            Placeholders disponibles: <code>{{invoiceNumber}}</code>, <code>{{monto}}</code>,
+            <code>{{vencimiento}}</code>, <code>{{periodo}}</code>. Se reemplazan solos al mandar el mensaje.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <span id="estado-guardado-plantilla" class="small text-secondary me-auto"></span>
+          <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+          <button type="button" id="btn-guardar-plantilla" class="btn btn-sm btn-success">Guardar</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="toast-container"></div>

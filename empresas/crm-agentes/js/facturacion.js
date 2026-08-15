@@ -104,3 +104,48 @@ document.getElementById('filtro-estado').addEventListener('change', (e) => {
 document.getElementById('btn-mas-facturas').addEventListener('click', () => cargarFacturas(false));
 
 cargarFacturas(true);
+
+// ---------------------------------------------------------------
+// Editor de plantillas (pedido explícito, 2026-08): antes había que abrir
+// el .txt a mano en el servidor -- esto lo trae al front. Se cachean en
+// memoria mientras el modal está abierto para no pisar texto sin guardar
+// al cambiar de plantilla en el <select>.
+// ---------------------------------------------------------------
+let plantillasCache = null;
+
+async function cargarPlantillas() {
+  const { data } = await Api.listMessageTemplates();
+  plantillasCache = {};
+  data.forEach((t) => { plantillasCache[t.name] = t.content; });
+  mostrarPlantillaSeleccionada();
+}
+
+function mostrarPlantillaSeleccionada() {
+  const nombre = document.getElementById('select-plantilla').value;
+  document.getElementById('texto-plantilla').value = plantillasCache?.[nombre] || '';
+  document.getElementById('estado-guardado-plantilla').textContent = '';
+}
+
+document.getElementById('btn-plantillas').addEventListener('click', () => {
+  document.getElementById('estado-guardado-plantilla').textContent = 'Cargando...';
+  cargarPlantillas().catch((err) => mostrarToast(err.message || 'No se pudieron cargar las plantillas', 'danger'));
+});
+
+document.getElementById('select-plantilla').addEventListener('change', mostrarPlantillaSeleccionada);
+
+document.getElementById('btn-guardar-plantilla').addEventListener('click', async () => {
+  const nombre = document.getElementById('select-plantilla').value;
+  const texto = document.getElementById('texto-plantilla').value;
+  const boton = document.getElementById('btn-guardar-plantilla');
+  boton.disabled = true;
+  try {
+    await Api.updateMessageTemplate(nombre, texto);
+    plantillasCache[nombre] = texto;
+    document.getElementById('estado-guardado-plantilla').textContent = 'Guardado ✓';
+    mostrarToast('Plantilla guardada', 'success');
+  } catch (err) {
+    mostrarToast(err.message || 'No se pudo guardar la plantilla', 'danger');
+  } finally {
+    boton.disabled = false;
+  }
+});
