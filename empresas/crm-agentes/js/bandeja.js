@@ -881,16 +881,21 @@ const ATTENTION_MODE_OPTIONS = ['ai', 'human', 'hybrid'];
 async function cargarPanelLateral() {
   const c = currentConversation;
   document.getElementById('detalle-ruc').textContent = c.externalCustomerId;
+
+  // Antes esto cortaba el UUID a 8 caracteres para cualquier agente que no
+  // fueras tú ("59c49408") -- ahora que la asignación pasa seguido sola
+  // (autoAssignCandidate en messageService.js), eso se veía todo el tiempo.
+  // Se necesita agentsCache cargado para poder mostrar el nombre real.
+  if (!agentsCache) agentsCache = (await Api.listAgents(true)).data;
   document.getElementById('detalle-asignado').textContent = c.assignedAgentId
     ? c.assignedAgentId === getAgent()?.id
       ? 'Tú'
-      : c.assignedAgentId.slice(0, 8)
+      : agentsCache.find((a) => a.id === c.assignedAgentId)?.full_name || 'Agente'
     : 'Sin asignar';
 
   const puedeReasignar = isSupervisorOrAdmin();
   document.getElementById('grupo-reasignar').classList.toggle('d-none', !puedeReasignar);
   if (puedeReasignar) {
-    if (!agentsCache) agentsCache = (await Api.listAgents(true)).data;
     const select = document.getElementById('select-reasignar');
     select.innerHTML =
       '<option value="">Elegir agente…</option>' +
